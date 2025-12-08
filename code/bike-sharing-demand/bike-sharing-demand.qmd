@@ -12,40 +12,11 @@ import os
 
 PROJECT_NAME = "bike-sharing-demand"
 
-def is_kaggle():
-    # Kaggle Notebook 에서는 일반적으로 아래 env가 존재함
-    return (
-        os.getenv("KAGGLE_KERNEL_RUN_TYPE") is not None or
-        os.path.exists("/kaggle/input")
-    )
-
-data_path = None
-if is_kaggle():
-    print("📌 Kaggle 환경 감지")
-
-    # Kaggle일 경우 input 내부 모든 파일 탐색
-    for dirname, _, filenames in os.walk("/kaggle/input"):
-        if PROJECT_NAME in dirname:   # competition dataset 디렉토리 찾기
-            data_path = dirname
-            break
-
-    if data_path is None:
-        raise FileNotFoundError(f"{PROJECT_NAME} 관련 데이터를 Kaggle input에서 찾지 못함.")
+def get_data_dir_path():
+    if (os.path.exists("/kaggle/input")):
+        return (os.path.join("/kaggle/input", PROJECT_NAME))
     else:
-        print(f"DATA_PATH = {data_path}")
-
-else:
-    print("📌 Local 환경 감지")
-
-    cwd = os.getcwd()
-
-    print(f"cwd = {cwd}")
-    if PROJECT_NAME in cwd:
-        data_path = os.path.join(cwd, "input")
-    else:
-        data_path = os.path.join(cwd, PROJECT_NAME, "input")
-
-    print(f"DATA_PATH = {data_path}")
+    	return (os.path.join(os.path.expanduser("~"), "dev", "kaggle", "input", PROJECT_NAME))
 ```
 
 ## 탐색적 데이터 분석
@@ -56,6 +27,7 @@ else:
 import numpy as np  # 넘파이 임포트
 import pandas as pd  # 판다스 임포트
 
+data_path = get_data_dir_path()
 print("data_path =", data_path) 
 train = pd.read_csv(os.path.join(data_path, "train.csv"))  # 훈련 데이터
 test = pd.read_csv(os.path.join(data_path, "test.csv"))  # 테스트 데이터
@@ -458,3 +430,40 @@ submission["count"] = np.exp(linearreg_preds)  #  지수변환
 submission.to_csv("submission.csv", index=False)  #  파일로 저장
 ```
 
+## 모델링 - 릿지 회귀
+
+### 하이퍼파라미터 최적화
+
+```{python}
+
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics
+
+ridge_model = Ridge()
+
+# 하이퍼파라미터 값 목록
+ridge_params = {'max_iter' : [3000], 'alpha' : [0.1, 1, 2, 3, 4, 10, 30, 100, 200, 300, 400, 800, 900, 1000]}
+
+# 교차 검증용 평가 함수
+rmsle_scorer = metrics.make_scorer(rmsle, greater_is_better = False)
+
+# 그리드서치(with 릿지) 객체 생성
+gridsearch_ridge_model = GridSearchCV(estimator = ridge_model,
+                                      param_grid = ridge_params,
+                                      scoring = rmsle_scorer,
+                                      cv = 5)
+```
+
+-scoring ： 평가지표． 사이킷런에서 기본적인 평가지표를 문자열 형태로 제공함．
+예를 들어， 정확도는 ‘accuracy’，
+F1 점수는 ‘f1’，
+ROC－AUC는 ‘roc＿auc’，
+재현율은 ‘recall’로 표시함．
+
+사이킷런에서 제공하는 평가지표를 사용하지 않고 별도로 만든 평가지표를 사용해도 됨．
+
+앞의 코드에서는 mertics．make＿scorer를 활용해 별도로 만든 평가지표를 사용．
+`make_scorer`는 평가지표 계산 함수와 평가지표 점수가 높으면 좋은지 여부 등을 인수로 받는 교차 검증용 평가 함수임
+
+• cv ：교차 검증 분할 개수(기본값은 5)
