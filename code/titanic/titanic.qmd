@@ -25,6 +25,12 @@ def get_data_dir_path():
         return (os.path.join("/kaggle/input", PROJECT_NAME))
     else:
     	return (os.path.join(os.path.expanduser("~"), "dev", "kaggle", "input", PROJECT_NAME))
+
+def get_output_dir_path():
+    if (os.path.exists("/kaggle/working")):
+        return "/kaggle/working"
+    else:
+        return (os.path.join(os.path.expanduser("~"), "dev", "kaggle", "output", PROJECT_NAME))
 ```
 
 ```{python}
@@ -280,7 +286,7 @@ print(f"Survived: {(predictions == 1).sum()}, Died: {(predictions == 0).sum()}")
 
 ```{python}
 # 제출 파일 저장
-output_dir = os.path.join(os.path.expanduser("~"), "dev", "kaggle", "output", PROJECT_NAME)
+output_dir = get_output_dir_path()
 os.makedirs(output_dir, exist_ok=True)
 
 output_path = os.path.join(output_dir, "submission.csv")
