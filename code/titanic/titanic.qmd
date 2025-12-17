@@ -1,0 +1,290 @@
+---
+title: Titanic
+jupyter: python3
+---
+
+```{python}
+import os
+
+import numpy as np  # 넘파이 임포트
+import pandas as pd  # 판다스 임포트
+
+import seaborn as sns
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+```
+- Predict survival on the Titanic and get familiar with ML basics
+
+## Data exploratary
+
+```{python}
+PROJECT_NAME = "titanic"
+
+def get_data_dir_path():
+    if (os.path.exists("/kaggle/input")):
+        return (os.path.join("/kaggle/input", PROJECT_NAME))
+    else:
+    	return (os.path.join(os.path.expanduser("~"), "dev", "kaggle", "input", PROJECT_NAME))
+```
+
+```{python}
+data_path = get_data_dir_path()
+print("data_path =", data_path) 
+train = pd.read_csv(os.path.join(data_path, "train.csv"))  # 훈련 데이터
+test = pd.read_csv(os.path.join(data_path, "test.csv"))  # 테스트 데이터
+submission = pd.read_csv(os.path.join(data_path, "gender_submission.csv"))  # 제출 샘플 데이터
+```
+
+### Feature Summary
+
+```{python}
+train = train.drop(columns=["Name"])
+
+def get_summary_df(origin: pd.DataFrame):
+    summary = pd.DataFrame(origin.dtypes, columns = ['데이터 타입'])
+    summary = summary.reset_index()
+    summary = summary.rename(columns = {'index':'피처'})
+    summary['결측값 개수'] = origin.isnull().sum().values
+    summary['고윳값 개수'] = origin.nunique().values
+    summary['첫번째 값'] = origin.loc[0].values
+    summary['두번째 값'] = origin.loc[1].values
+    summary['세번째 값'] = origin.loc[2].values
+    return (summary)
+    
+summary = get_summary_df(train)
+print(summary)
+```
+
+```{python}
+cols = np.array(train.columns)
+print(cols)
+figure, axes = plt.subplots(nrows = 4, ncols = 2)
+# sns.histplot(x="Sex",         y="Survived", data=train, ax=axes[0, 0])
+# sns.histplot(x="Age",         y="Survived", data=train, ax=axes[0, 0])
+sns.countplot(x="Pclass",   hue="Survived", data=train, ax=axes[0, 0])
+sns.countplot(x="Sex",      hue="Survived", data=train, ax=axes[0, 1])
+sns.histplot(x="SibSp",       y="Survived", data=train, ax=axes[1, 0])
+sns.histplot(x="Parch",       y="Survived", data=train, ax=axes[1, 1])
+sns.histplot(x="Ticket",      y="Survived", data=train, ax=axes[2, 0])
+sns.histplot(x="Fare",        y="Survived", data=train, ax=axes[2, 1])
+sns.histplot(x="Cabin",       y="Survived", data=train, ax=axes[3, 0])
+# sns.histplot(x="Embarked",  y="Survived", data=train, ax=axes[3, 1])
+sns.countplot(x="Embarked", hue="Survived", data=train, ax=axes[3, 1])
+axes[0, 0].ylabels = [0, 1]
+axes[3, 0].tick_params(labelrotation=90)
+plt.tight_layout()
+```
+```{python}
+bins = [0, 10, 20, 30, 40, 50, 60, 80]  # 원하는 대로 조정
+labels = ['0-9','10-19','20-29','30-39','40-49','50-59','60+']
+
+train['AgeBin'] = pd.cut(train['Age'], bins=bins, labels=labels, right=False)
+plt.figure(figsize=(10, 4))
+sns.countplot(data=train, x='AgeBin', hue='Survived')
+plt.xlabel('Age Group')
+plt.ylabel('Count')
+plt.show()
+```
+
+```{python}
+bins   = [0, 10, 20, 30, 40, 50, 60, 80]
+labels = ['0s','10s','20s','30s','40s','50s','60+']
+
+train['AgeBin'] = pd.cut(train['Age'], bins=bins, labels=labels, right=False)
+
+# 연령대별 Survived=0,1 카운트
+age_counts = train.groupby(['AgeBin', 'Survived']).size().unstack(fill_value=0)
+# 컬럼 이름 정리 (선택)
+age_counts.columns = ['Died', 'Survived']  # 0=사망, 1=생존
+age_counts = age_counts.reset_index()
+
+plt.figure(figsize=(10, 4))
+sns.lineplot(data=age_counts, x='AgeBin', y='Died', marker='o', label='Died')
+sns.lineplot(data=age_counts, x='AgeBin', y='Survived', marker='o', label='Survived')
+
+plt.xlabel('Age Group')
+plt.ylabel('Count')
+plt.legend()
+plt.show()
+```
+
+```{python}
+print(train.columns)
+print(train.head())
+```
+
+```{python}
+print(train.info)
+```
+
+```{python}
+# print(train.columns)
+print(train.head())
+# print(test.columns)
+# print(test.info)
+```
+
+```{python}
+from sklearn.preprocessing import OneHotEncoder
+
+onehot_encoder = OneHotEncoder()
+
+encoded_embarked = onehot_encoder.fit_transform(train[["Embarked"]])
+print(type(encoded_embarked))
+print(pd.DataFrame(encoded_embarked.toarray()))
+dummy = pd.get_dummies(train[["Embarked"]])
+print(type(dummy))
+
+
+```
+
+## Data Preprocessing
+
+```{python}
+# 데이터 로드 (새로 로드하여 깨끗한 상태로 시작)
+train_processed = pd.read_csv(os.path.join(data_path, "train.csv"))
+test_processed = pd.read_csv(os.path.join(data_path, "test.csv"))
+
+print("Train shape:", train_processed.shape)
+print("Test shape:", test_processed.shape)
+```
+
+```{python}
+# 결측치 처리
+# Age: 중앙값으로 대체
+train_processed['Age'] = train_processed['Age'].fillna(train_processed['Age'].median())
+test_processed['Age'] = test_processed['Age'].fillna(test_processed['Age'].median())
+
+# Embarked: 최빈값으로 대체
+train_processed['Embarked'] = train_processed['Embarked'].fillna(train_processed['Embarked'].mode()[0])
+test_processed['Embarked'] = test_processed['Embarked'].fillna(test_processed['Embarked'].mode()[0])
+
+# Fare: 중앙값으로 대체
+test_processed['Fare'] = test_processed['Fare'].fillna(test_processed['Fare'].median())
+
+# Cabin: 결측값이 많으므로 있음/없음으로 변환
+train_processed['Cabin'] = train_processed['Cabin'].notna().astype(int)
+test_processed['Cabin'] = test_processed['Cabin'].notna().astype(int)
+
+print("결측치 처리 후 Train 결측값:\n", train_processed.isnull().sum())
+print("\n결측치 처리 후 Test 결측값:\n", test_processed.isnull().sum())
+```
+
+```{python}
+# 새로운 피처 생성
+# FamilySize: 가족 구성원 수
+train_processed['FamilySize'] = train_processed['SibSp'] + train_processed['Parch'] + 1
+test_processed['FamilySize'] = test_processed['SibSp'] + test_processed['Parch'] + 1
+
+# IsAlone: 혼자 여행 여부
+train_processed['IsAlone'] = (train_processed['FamilySize'] == 1).astype(int)
+test_processed['IsAlone'] = (test_processed['FamilySize'] == 1).astype(int)
+
+print("새로운 피처 추가 완료")
+print(train_processed[['SibSp', 'Parch', 'FamilySize', 'IsAlone']].head())
+```
+
+```{python}
+# 범주형 변수 인코딩
+# Sex: male=1, female=0
+train_processed['Sex'] = train_processed['Sex'].map({'male': 1, 'female': 0})
+test_processed['Sex'] = test_processed['Sex'].map({'male': 1, 'female': 0})
+
+# Embarked: One-Hot Encoding
+train_processed = pd.get_dummies(train_processed, columns=['Embarked'], prefix='Embarked')
+test_processed = pd.get_dummies(test_processed, columns=['Embarked'], prefix='Embarked')
+
+# 사용하지 않을 컬럼 제거
+drop_cols = ['PassengerId', 'Name', 'Ticket']
+train_processed = train_processed.drop(columns=drop_cols)
+
+# test에서는 PassengerId를 나중에 사용하므로 따로 저장
+test_ids = test_processed['PassengerId']
+test_processed = test_processed.drop(columns=drop_cols)
+
+print("전처리 완료!")
+print("Train shape:", train_processed.shape)
+print("Test shape:", test_processed.shape)
+print("\nTrain columns:", train_processed.columns.tolist())
+```
+
+## Model Training
+
+```{python}
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+
+# 학습 데이터 준비
+X = train_processed.drop('Survived', axis=1)
+y = train_processed['Survived']
+
+print("Features:", X.columns.tolist())
+print("X shape:", X.shape)
+print("y shape:", y.shape)
+```
+
+```{python}
+# Random Forest 모델 생성 및 학습
+rf_model = RandomForestClassifier(
+    n_estimators=100,
+    max_depth=10,
+    min_samples_split=5,
+    min_samples_leaf=2,
+    random_state=42
+)
+
+rf_model.fit(X, y)
+
+# Cross Validation 점수 확인
+cv_scores = cross_val_score(rf_model, X, y, cv=5, scoring='accuracy')
+print(f"Cross Validation Scores: {cv_scores}")
+print(f"Mean CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+```
+
+```{python}
+# Feature Importance 시각화
+feature_importance = pd.DataFrame({
+    'feature': X.columns,
+    'importance': rf_model.feature_importances_
+}).sort_values('importance', ascending=False)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(data=feature_importance, x='importance', y='feature')
+plt.title('Feature Importance - Random Forest')
+plt.xlabel('Importance')
+plt.ylabel('Feature')
+plt.tight_layout()
+plt.show()
+
+print("\nFeature Importance:")
+print(feature_importance)
+```
+
+## Prediction and Submission
+
+```{python}
+# 테스트 데이터로 예측
+predictions = rf_model.predict(test_processed)
+
+# 제출 파일 생성
+submission_df = pd.DataFrame({
+    'PassengerId': test_ids,
+    'Survived': predictions
+})
+
+print("Predictions sample:")
+print(submission_df.head(10))
+print(f"\nTotal predictions: {len(submission_df)}")
+print(f"Survived: {(predictions == 1).sum()}, Died: {(predictions == 0).sum()}")
+```
+
+```{python}
+# 제출 파일 저장
+output_dir = os.path.join(os.path.expanduser("~"), "dev", "kaggle", "output", PROJECT_NAME)
+os.makedirs(output_dir, exist_ok=True)
+
+output_path = os.path.join(output_dir, "submission.csv")
+submission_df.to_csv(output_path, index=False)
+
+print(f"Submission file saved to: {output_path}")
+```
